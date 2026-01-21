@@ -31,6 +31,7 @@ resource "azurerm_storage_account" "insecure" {
   public_network_access_enabled = true 
 }
 
+
 # # VULNERABILITY 2: Public Key Vault
 # # This exposes sensitive secrets to the public internet
 # resource "azurerm_key_vault" "insecure_kv" {
