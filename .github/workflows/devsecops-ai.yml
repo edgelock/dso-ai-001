@@ -1,26 +1,54 @@
-name: AI Security Pipeline
-on: [pull_request] # This triggers the AI when a PR is opened
+name: AI-Powered Terraform CI/CD
+on:
+  pull_request: # Stage 1: Run on every PR
+  push:
+    branches:
+      - main  # Stage 2: Run only after PR is merged into main
 
 jobs:
-  scan-and-fix:
+  # --- STAGE 1: PLAN & AI REMEDIATION ---
+  terraform-ci:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write # Allows the script to comment on your code
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Run Checkov Security Scan
-        uses: bridgecrewio/checkov-action@master
-        with:
-          directory: .
-          soft_fail: true # Prevents the pipeline from stopping so the AI can run
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Trigger AI Remediation
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init & Plan
+        run: |
+          terraform init
+          terraform plan -no-color
+
+      - name: Run AI Security Fixer
         env:
           AZURE_OPENAI_KEY: ${{ secrets.AZURE_OPENAI_KEY }}
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python remediate_ai.py
+
+  # --- STAGE 2: APPLY AFTER MERGE ---
+  terraform-cd:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Apply
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
         run: |
-          pip install requests
-          python remediate_ai.py
+          terraform init
+          terraform apply -auto-approve
